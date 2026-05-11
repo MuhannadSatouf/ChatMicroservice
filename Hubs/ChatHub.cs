@@ -1,17 +1,40 @@
+using ChatService.Api.Clients;
 using ChatService.Api.Contracts;
+using ChatService.Api.Services;
 using Microsoft.AspNetCore.SignalR;
 
 namespace ChatService.Api.Hubs;
 
-public sealed class ChatHub : Hub
+public sealed class ChatHub : Hub<IChatClient>
 {
-  public async Task JoinRoom(string roomId)
+    private readonly IChatMessageService _chatMessageService;
+    private readonly ILogger<ChatHub> _logger;
+
+    public ChatHub(
+        IChatMessageService chatMessageService,
+        ILogger<ChatHub> logger)
+    {
+        _chatMessageService = chatMessageService;
+        _logger = logger;
+    }
+
+    public async Task JoinRoom(string roomId)
     {
         if (string.IsNullOrWhiteSpace(roomId))
+        {
             throw new HubException("RoomId is required.");
+        }
+
+        roomId = roomId.Trim();
 
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
-        await Clients.Group(roomId).SendAsync("UserJoined", new
+
+        _logger.LogInformation(
+            "Connection {ConnectionId} joined room {RoomId}",
+            Context.ConnectionId,
+            roomId);
+
+        await Clients.Group(roomId).UserJoined(new
         {
             RoomId = roomId,
             ConnectionId = Context.ConnectionId,
@@ -22,11 +45,20 @@ public sealed class ChatHub : Hub
     public async Task LeaveRoom(string roomId)
     {
         if (string.IsNullOrWhiteSpace(roomId))
+        {
             throw new HubException("RoomId is required.");
+        }
+
+        roomId = roomId.Trim();
 
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
 
-        await Clients.Group(roomId).SendAsync("UserLeft", new
+        _logger.LogInformation(
+            "Connection {ConnectionId} left room {RoomId}",
+            Context.ConnectionId,
+            roomId);
+
+        await Clients.Group(roomId).UserLeft(new
         {
             RoomId = roomId,
             ConnectionId = Context.ConnectionId,
@@ -36,39 +68,48 @@ public sealed class ChatHub : Hub
 
     public async Task SendMessage(SendMessageRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.RoomId))
-            throw new HubException("RoomId is required.");
+        var message = _chatMessageService.CreateMessage(request);
 
-        if (string.IsNullOrWhiteSpace(request.SenderId))
-            throw new HubException("SenderId is required.");
+        _logger.LogInformation(
+            "Message {MessageId} sent to room {RoomId} by sender {SenderId}",
+            message.MessageId,
+            message.RoomId,
+            message.SenderId);
 
-        if (string.IsNullOrWhiteSpace(request.SenderName))
-            throw new HubException("SenderName is required.");
-
-        if (string.IsNullOrWhiteSpace(request.Content))
-            throw new HubException("Message content is required.");
-
-        var message = new ChatMessageResponse
-        {
-            MessageId = Guid.NewGuid().ToString("N"),
-            RoomId = request.RoomId,
-            SenderId = request.SenderId,
-            SenderName = request.SenderName,
-            Content = request.Content.Trim(),
-            SentAt = DateTimeOffset.UtcNow
-        };
-
-        await Clients.Group(request.RoomId).SendAsync("ReceiveMessage", message);
+        await Clients.Group(message.RoomId).ReceiveMessage(message);
     }
 
     public override async Task OnConnectedAsync()
     {
-        await Clients.Caller.SendAsync("Connected", new
+        _logger.LogInformation(
+            "Client connected with connection id {ConnectionId}",
+            Context.ConnectionId);
+
+        await Clients.Caller.Connected(new
         {
             ConnectionId = Context.ConnectionId,
             ConnectedAt = DateTimeOffset.UtcNow
         });
 
         await base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        if (exception is not null)
+        {
+            _logger.LogWarning(
+                exception,
+                "Client disconnected with error. Connection id: {ConnectionId}",
+                Context.ConnectionId);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Client disconnected. Connection id: {ConnectionId}",
+                Context.ConnectionId);
+        }
+
+        await base.OnDisconnectedAsync(exception);
     }
 }
