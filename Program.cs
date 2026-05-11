@@ -26,8 +26,9 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddScoped<IChatMessageService, ChatMessageService>();
+builder.Services.AddSingleton<IChatMessageService, ChatMessageService>();
 builder.Services.AddSingleton<IChatRoomService, InMemoryChatRoomService>();
+builder.Services.AddSingleton<IOnlineUserService, InMemoryOnlineUserService>();
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
