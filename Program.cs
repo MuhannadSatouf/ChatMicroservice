@@ -1,6 +1,5 @@
 using ChatService.Api.Hubs;
 using ChatService.Api.Services;
-
 var builder = WebApplication.CreateBuilder(args);
 
 const string CorsPolicyName = "AllowedClients";
@@ -28,6 +27,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddScoped<IChatMessageService, ChatMessageService>();
+builder.Services.AddSingleton<IChatRoomService, InMemoryChatRoomService>();
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
