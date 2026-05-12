@@ -108,7 +108,14 @@ public sealed class ChatHub : Hub<IChatClient>
             throw new HubException("Room does not exist.");
         }
 
-        var message = _chatMessageService.CreateMessage(request);
+        var result = _chatMessageService.CreateMessage(request);
+        var message = result.Message;
+
+        if (!result.IsNew)
+        {
+            await Clients.Caller.ReceiveMessage(message);
+            return;
+        }
 
         _logger.LogInformation(
             "Message {MessageId} sent to room {RoomId} by sender {SenderId}",

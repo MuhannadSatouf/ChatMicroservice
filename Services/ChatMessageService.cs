@@ -9,7 +9,7 @@ public sealed class ChatMessageService : IChatMessageService
 {
     private readonly ConcurrentDictionary<string, List<ChatMessageResponse>> _messagesByRoom = new();
 
-    public ChatMessageResponse CreateMessage(SendMessageRequest request)
+    public CreateMessageResult CreateMessage(SendMessageRequest request)
     {
         ValidateMessage(request);
 
@@ -25,7 +25,11 @@ public sealed class ChatMessageService : IChatMessageService
 
                 if (existingMessage is not null)
                 {
-                    return existingMessage;
+                    return new CreateMessageResult
+                    {
+                        Message = existingMessage,
+                        IsNew = false
+                    };
                 }
             }
         }
@@ -50,7 +54,11 @@ public sealed class ChatMessageService : IChatMessageService
             roomMessages.Add(message);
         }
 
-        return message;
+        return new CreateMessageResult
+        {
+            Message = message,
+            IsNew = true
+        };
     }
 
     public IReadOnlyCollection<ChatMessageResponse> GetMessagesByRoomId(string roomId)
